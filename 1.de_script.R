@@ -17,6 +17,7 @@ library(ggrepel)
 library(plyr)
 library(GGally)
 library(corrplot)
+library(WGCNA)
 
 # set ggplot2 theme
 theme_update(text = element_text(family = "Helvetica", size=8),
@@ -162,8 +163,50 @@ p <- ggplot(res_df, aes(log2FoldChange, -log10(pvalue))) +
                   aes(label = gene_symbols_italic),
                   max.overlaps=20, parse=T) +
   xlab("Log2 Fold Change") +
-  ylab("-Log10 P-value")
+  ylab("-Log10 p-value")
 print(p)
+dev.off()
+
+#########################
+# COMPARISON WITH BOS PAPER
+#########################
+# list genes from paper
+top_53_genes <- c(
+  "MMP8", "OLFM4", "RETN", "GPR84", "CEACAM1", "LCN2", "ZDHHC19",
+  "ANKRD22", "CD177", "HP", "TCN1", "PFKFB2", "CD24", "LTF", "DHRS9",
+  "CHCHD7", "EXOSC4", "SMPDL3A", "PLAC8", "PDSS1", "TFRC", "MS4A4A",
+  "BPI", "CLEC5A", "ASPRV1", "PILRA", "TNFAIP2", "CRISPLD2", "IFIT2",
+  "ATP2B1", "MAK", "FGL2", "LOC728392", "REM2", "CAMK1D", "VCAN",
+  "BTNL8", "ST6GALNAC2", "CECR1", "CPVL", "RNASE6", "CFD", "RPS6KA5",
+  "TREM1", "DPEP2", "KRT23", "HCAR2", "SULF2", "HAL", "TGFBI",
+  "ADGRE3", "RBP7", "MME"
+)
+
+# keep genes in common
+top_53_genes_tmp <- intersect(top_53_genes, sig_results$hgnc_symbol)
+res_53_genes <- sig_results[sig_results$hgnc_symbol %in% top_53_genes_tmp, ]
+rownames(res_53_genes) <- res_53_genes$hgnc_symbol
+
+# order DE analysis results given results from paper
+res_53_genes <- res_53_genes[top_53_genes_tmp, ]
+
+# add sign
+res_53_genes$sign <- res_53_genes$log2FoldChange < 0
+
+# to keep order for the plot
+res_53_genes$hgnc_symbol <- factor(res_53_genes$hgnc_symbol,
+                                   levels = res_53_genes$hgnc_symbol)
+
+# plot log fold change values and sign
+pdf(paste(results_path, "bos_comp.pdf", sep = ""), width = fig_width*0.7, height = fig_height)
+print(ggplot(res_53_genes, aes(x = hgnc_symbol,
+                               y = log2FoldChange, fill = sign)) +
+        geom_bar(stat = "identity") +
+        coord_flip() +
+        scale_x_discrete(limits = rev(levels(res_53_genes$hgnc_symbol))) +
+        theme_bw()+
+        theme(legend.position = "none") + ylab("Log2 Fold Change") + 
+        xlab("HGNC Symbol"))
 dev.off()
 
 #########################
@@ -202,89 +245,6 @@ sig_results_anc <- data.frame(res_anc[res_anc$padj < 0.05, ])
 # compare with results not including ANC values as covariate
 # 0.92 correlation
 cor.test(res$stat, res_anc[rownames(res), "stat"], method = "spearman")
-
-#########################
-# BIOMARKERS VS. GENE EXPRESSSION
-#########################
-# plasma biomarkers of interest
-covs_for_comp <- c("bilirubin_fin", "PAI1", "IL6", "sTNFr1", "RAGE", 
-                   "IL8", "ANG2", "Proc_C", "ICAM", "naminsaps", "hco3minsaps", 
-                   "creatininemaxsaps", "albuminminsaps", "glucoseminsaps", 
-                   "wbcmaxsaps", "hctminsaps", "plateletsminsaps")
-meta_data_for_comp <- meta_data[, covs_for_comp]
-
-# rename variables for vis
-from_ <- covs_for_comp
-to_ <- c("Bilirubin", "PAI-1", "Interleukin-6", "sTNFr1", "RAGE", 
-         "Interleukin-8", "ANG-2", "Protein-C", "ICAM", "Sodium", "Bicarbonate",
-         "Creatinine", "Albumin", "Glucose", "White cell count", "Hematocrit",
-         "Platelets")
-
-colnames(meta_data_for_comp) <- mapvalues(colnames(meta_data_for_comp), 
-                                          from_, to_)
-
-covs_for_comp <- colnames(meta_data_for_comp)
-
-# add LCA
-meta_data_for_comp$LCA_label <- meta_data$LCA_label
-
-vsd_assay <- assay(vsd)
-rownames(vsd_assay)[rownames(vsd_assay)=="ENSG00000242574"] <- "HLA-DMB"
-rownames(vsd_assay)[rownames(vsd_assay)=="ENSG00000169896"] <- "ITGAM"
-rownames(vsd_assay)[rownames(vsd_assay)=="ENSG00000100985"] <- "MMP9"
-rownames(vsd_assay)[rownames(vsd_assay)=="ENSG00000136634"] <- "IL10"
-
-# test
-meta_data_for_comp[, c("Albumin", "Interleukin-6", "Interleukin-8")] <- log10(meta_data_for_comp[, c("Albumin", "Interleukin-6", "Interleukin-8")] +1)
-
-# glm to get coefficients
-for (biom_ in colnames(meta_data_for_comp[, c("Albumin", "Interleukin-6", "Interleukin-8")])){
-  for (gene_ in colnames(t(vsd_assay[c("HLA-DMB", "ITGAM", "MMP9", "IL10") , ]))){
-    glm_data <- cbind(meta_data_for_comp[, c(biom_, "LCA_label")], t(vsd_assay[c("HLA-DMB", "ITGAM", "MMP9", "IL10") , ])[, gene_])
-    colnames(glm_data)[3] <- gene_
-    
-    print(biom_)
-    print(gene_)
-  
-    # for all
-    print(summary(glm(as.formula(paste0(paste0(paste0("`", gene_), "`~`"), paste0(biom_,"`"))), data = glm_data))$coefficients[2, c(1, 4)])
-    
-    # hypo
-    print(summary(glm(as.formula(paste0(paste0(paste0("`", gene_), "`~`"), paste0(biom_,"`"))), data = glm_data[glm_data$LCA_label=="Hypo", ]))$coefficients[2, c(1, 4)])
-    # hyper
-    print(summary(glm(as.formula(paste0(paste0(paste0("`", gene_), "`~`"), paste0(biom_,"`"))), data = glm_data[glm_data$LCA_label=="Hyper",]))$coefficients[2, c(1, 4)])
-    
-    # interaction
-    print(summary(glm(as.formula(paste0(paste0(paste0("`", gene_), "`~LCA_label*`"), paste0(biom_,"`"))), data = glm_data))$coefficients[4, c(1, 4)])
-    
-  }
-}
-
-
-ggpairs_plot <- ggpairs(cbind(meta_data_for_comp[, c("Albumin", "Interleukin-6", "Interleukin-8")], t(vsd_assay[c("HLA-DMB", "ITGAM", "MMP9", "IL10") , ])), 
-        aes(color=meta_data_for_comp$LCA_label),
-        lower = list(continuous = "blank"), 
-        upper = list(continuous = wrap("smooth", size=1)), 
-        diag = list(continous = "blank"),
-        axisLabels = "show") + 
-  scale_color_manual(breaks=c("Hyper", "Hypo"), values = c("#EE7D31","#4472C4")) +
-  theme_bw()
-
-ggpairs_plot$plots <- ggpairs_plot$plots[1:21]
-
-pdf(paste0(results_path, "ggpairs_plot.pdf"), width = 7, height = 7)
-print(ggpairs_plot +
-        theme(text = element_text(family = "Helvetica", size=8),
-              axis.text.x = element_text(family = "Helvetica", size=8),
-              axis.text.y = element_text(family = "Helvetica", size=8),
-              axis.title.x = element_text(family = "Helvetica", size=8),
-              axis.title.y = element_text(family = "Helvetica", size=8),
-              legend.text = element_text(family = "Helvetica", size=8),
-              legend.title = element_text(family = "Helvetica", size=8),
-              strip.text.x = element_text(family = "Helvetica", size=8, face = "italic"),
-              strip.text.y = element_text(family = "Helvetica", size=8),
-              plot.title = element_text(family = "Helvetica", size=8)))
-dev.off()
 
 #########################
 # GSEA - IPA
@@ -353,7 +313,7 @@ hypervshypo_cp_sig_full$cp <- hypervshypo_cp_sig_full$`Ingenuity Canonical Pathw
 hypervshypo_cp_sig_full$cp <- factor(hypervshypo_cp_sig_full$cp, levels=hypervshypo_cp_sig_full$cp)
 
 # dot plot
-pdf(paste(results_path, "ipa_cp_full_plot.pdf", sep = ""), width = fig_width*0.8, height = fig_height*0.7)
+pdf(paste(results_path, "ipa_cp_full_plot.pdf", sep = ""), width = fig_width*0.8, height = fig_height)
 print(ggplot(hypervshypo_cp_sig_full, aes(x=zScore, y=cp)) +
         geom_point(aes(color=zscore_sign), size=3, show.legend=F) +
         scale_color_manual(breaks=c("+", "-"), values = c("#EE7D31","#4472C4")) +
@@ -451,62 +411,253 @@ print(ggplot(gsea_res_df_filt, aes(x=NES, y=pathway)) +
 dev.off()
 
 #########################
-# BIOMARKERS - IPA
+# PROPORTION OF EXPLAINED VARIANCE
 #########################
-# colors
-pal_ <- colorRampPalette(rev(c("#EE7D31",
-                               "#FFFFFF",
-                               "#4472C4")))(200)
+# expression cutoff
+vst_filt <- assay(vsd)
+vst_filt <- vst_filt[order(rowVars(vst_filt), decreasing=T), ]
+vst_filt <- vst_filt[1:1000, ]
 
-# for genes without symbol, use ENSG id
-ensembl_res$hgnc_symbol[ensembl_res$hgnc_symbol==""] <- ensembl_res$ensembl_gene_id[ensembl_res$hgnc_symbol==""]
+design <- ~ LCA_label + sofa_scaled + apacheiii_scaled + wbcmaxsaps + Gender1 + agephi
 
-# for pathways of interest
-poi_names <- hypervshypo_cp_sig_full$`Ingenuity Canonical Pathways`
+meta_data$sofa_scaled <- scale(meta_data$sofa)
+meta_data$apacheiii_scaled <- scale(meta_data$apacheiii)
 
-clin_biom <- c("Bilirubin", "Sodium", "Bicarbonate", "Creatinine", "Albumin", "Glucose", "White cell count", "Hematocrit", "Platelets" )
-research_biom <- c("PAI-1", "Interleukin-6", "sTNFr1", "RAGE", "Interleukin-8", "ANG-2", "Protein-C", "ICAM")
+var_part <- fitExtractVarPartModel(vst_filt, design, meta_data)
 
-for (poi_name in poi_names){
-  poi_genes <- strsplit(hypervshypo_cp_sig_full[hypervshypo_cp_sig_full$`Ingenuity Canonical Pathways`==poi_name, "geneNames"], ",")[[1]]
-  poi_genes <- unique(poi_genes)
-  poi_genes <- poi_genes[poi_genes!=""]
-  
-  poi_vsd <- vsd_assay[rownames(vsd_assay) %in% ensembl_res$ensembl_gene_id[match(poi_genes, ensembl_res$hgnc_symbol)], ]
-  rownames(poi_vsd) <- ensembl_res$hgnc_symbol[match(rownames(poi_vsd),
-                                                     ensembl_res$ensembl_gene_id)]
-  
-  if (dim(poi_vsd)[1] > 25){
-    sig_results_tmp <- sig_results[sig_results$hgnc_symbol %in% rownames(poi_vsd), ]
-    sig_genes_tmp <- sig_results_tmp[order(sig_results_tmp$padj), "hgnc_symbol"][1:25]
-    
-    poi_vsd <- poi_vsd[sig_genes_tmp, ]
-  }
-  
-  if (dim(poi_vsd)[1] > 1){
-    # correlation matrices
-    poi_cov <- data.frame(row.names = rownames(poi_vsd))
-    for (cov_ in colnames(meta_data_for_comp)){
-      if (cov_!="LCA_label"){
-        cov_data <- meta_data_for_comp[, cov_, drop=F]
-        poi_cov[, cov_] <- apply(poi_vsd, 1, function(x) cor(x, cov_data, method = "spearman", use = "complete.obs"))
-      }
+colnames(var_part)[colnames(var_part)=="sofa_scaled"] <- "SOFA"
+colnames(var_part)[colnames(var_part)=="apacheiii_scaled"] <- "APACHE III"
+colnames(var_part)[colnames(var_part)=="wbcmaxsaps"] <- "White Cell Count"
+
+pdf(paste(results_path, "expl_var.pdf", sep = ""), width = fig_width*0.6, height = fig_height*0.5)
+print(plotVarPart(sortCols(var_part[c("LCA_label", "SOFA", "APACHE III", "White Cell Count")])) + 
+        ylim(c(0, 50))+
+        theme(text = element_text(family = "Helvetica", size=8),
+              axis.text.x = element_text(family = "Helvetica", size=8),
+              axis.text.y = element_text(family = "Helvetica", size=8),
+              axis.title.x = element_text(family = "Helvetica", size=8),
+              axis.title.y = element_text(family = "Helvetica", size=8),
+              legend.text = element_text(family = "Helvetica", size=8),
+              legend.title = element_text(family = "Helvetica", size=8),
+              strip.text.x = element_text(family = "Helvetica", size=8),
+              strip.text.y = element_text(family = "Helvetica", size=8),
+              plot.title = element_text(family = "Helvetica", size=8)))
+dev.off()
       
-    }
+median(var_part$LCA_label)
+median(var_part$sofa_scaled)
+median(var_part$apacheiii_scaled)
+median(var_part$wbcmaxsaps)
 
-    # pathway genes vs biomarkers
-    poi_name_output <- gsub(" ", "_", poi_name)
-    
-    pdf(paste(results_path, paste(poi_name_output, "_ipa_corrplot.pdf", sep=""), sep = ""), 
-        width = 0.8*fig_width, height = 0.8*fig_height, fonts = "Helvetica", pointsize = 8)   
-    par(mfrow=c(1, 2))
-    print(corrplot(as.matrix(poi_cov[, clin_biom]), col=pal_, mar=c(1.2,1,0.9,1) + 0.1))
-    print(corrplot(as.matrix(poi_cov[, research_biom]), col=pal_, mar = c(0.3,1,1.1,1) + 0.9))
-    dev.off()
-  }
-}
+#########################
+# WGCNA
+#########################
+wgcna_data <- t(assay(vsd))
+wgcna_meta_data <- meta_data
 
+# covs to display
+covs_filt <- c("Gender1", "Race1", "agephi", "diabetes", "PrimaryDiag1", "BASEABG_FiO2_1","BASEABG_PAO2_1","BASEABG_PaCO2_1","PFRatio_Brus","SFRatio_Brus","maxtemp","lowestsbp_today",
+               "hrmax","mechvent","minutevent","peep","plateaupressure","meanairwaypressure","sofa", "positiveculture", "ali_risk",
+               "sepsiscat","BERLIN_ARDS",
+               "VFD","onpressorssaps","rrmaxsaps","urineoutputsaps", "naminsaps", "hco3minsaps","creatininemaxsaps",                
+               "albuminminsaps", "glucoseminsaps", "wbcmaxsaps","hctminsaps","plateletsminsaps", "sapsii", "apacheiii", "bmi", "bilirubin_fin", "PAI1", "IL6","sTNFr1","RAGE",                                 
+               "IL8","ANG2","Proc_C","ICAM","in_hospital_death",
+               "LCA_label", "frac_anc",
+               "Caucasian_Ethnicity1","PrimaryDiagCat1","bacteremia",
+               "viruspos")
 
+cat_vars <- c("Gender1", "Race1", "PrimaryDiag1", "positiveculture", "ali_risk", "BERLIN_ARDS", "onpressorssaps", "mechvent", "diabetes",
+              "sepsiscat", "LCA_label", "Caucasian_Ethnicity1","PrimaryDiagCat1", "in_hospital_death", "bacteremia", "viruspos")
+
+covs_filt <- covs_filt[!(covs_filt %in% cat_vars)]
+
+#wgcna_meta_data[, cat_vars] <- apply(wgcna_meta_data[, cat_vars], 2, function(x) as.numeric(as.factor(x)))
+
+wgcna_meta_data <- wgcna_meta_data[, covs_filt]
+
+powers_ = c(seq(4,10,by=1), seq(12,20, by=2))
+
+# network topology analysis function for each set
+power_table <- pickSoftThreshold(wgcna_data, powerVector=powers_, verbose = 2)
+
+plot_cols <- c(2,5,6,7)
+col_names <- c("Scale Free Topology Model Fit", "Mean connectivity", "Median connectivity",
+             "Max connectivity")
+colors_ <- c("black", "red")
+
+# choose power
+sizeGrWindow(9, 5)
+par(mfrow = c(1,2))
+cex1 = 0.9
+
+# diag plots
+plot(power_table$fitIndices[,1], -sign(power_table$fitIndices[,3])*power_table$fitIndices[,2],
+     xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
+     main = paste("Scale independence"))
+text(power_table$fitIndices[,1], -sign(power_table$fitIndices[,3])*power_table$fitIndices[,2],
+     labels=powers_,cex=cex1,col="red")
+# this line corresponds to using an R^2 cut-off of h
+abline(h=0.90,col="red")
+
+plot(power_table$fitIndices[,1], power_table$fitIndices[,5],
+     xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
+     main = paste("Mean connectivity"))
+text(power_table$fitIndices[,1], power_table$fitIndices[,5], labels=powers_, cex=cex1,col="red")
+
+# choose 12 from plots
+net_ <- blockwiseModules(wgcna_data, power = 12, TOMType = "unsigned", minModuleSize = 30,
+                         reassignThreshold = 0, mergeCutHeight = 0.25,
+                         numericLabels = TRUE, pamRespectsDendro = FALSE,
+                         saveTOMs = TRUE,
+                         saveTOMFileBase = "femaleMouseTOM",
+                         verbose = 3, maxBlockSize=20000)
+
+# define ns
+n_genes <- ncol(wgcna_data)
+n_samples <-  nrow(wgcna_data)
+
+mod_colors <- labels2colors(net_$colors)
+
+mod_eig <- moduleEigengenes(wgcna_data, mod_colors)$eigengenes
+mods_ <- orderMEs(mod_eig)
+mod_trait_cor <- cor(mods_, wgcna_meta_data, use = "p")
+mod_trait_pval <- corPvalueStudent(mod_trait_cor, nSamples)
+
+# mod covs relationships
+sizeGrWindow(10,6)
+
+text_mat <- paste(signif(mod_trait_cor, 2), "\n(",
+                   signif(mod_trait_pval, 1), ")", sep = "")
+
+dim(text_mat) <- dim(mod_trait_cor)
+par(mar = c(6, 8.5, 3, 3))
+
+# plot
+pdf(paste(results_path, "wgcna_mods_covs.pdf", sep = ""), width = 12, height = 10)
+print(labeledHeatmap(Matrix = mod_trait_cor,
+               xLabels = names(wgcna_meta_data),
+               yLabels = names(mods_),
+               ySymbols = names(mods_),
+               colorLabels = FALSE,
+               colors = greenWhiteRed(50),
+               textMatrix = text_mat,
+               setStdMargins = T,
+               cex.text = 0.5,
+               zlim = c(-1,1), 
+               main = paste("Module-trait relationships")))
+dev.off()
+
+# with LCA
+meta_data$LCA_label <- factor(meta_data$LCA_label, levels=c("Hypo", "Hyper"))
+
+lca_pvals <- apply(mods_, 2, function(x) summary(glm(meta_data$LCA_label~x, family="binomial"))$coefficients["x", "Pr(>|z|)"])
+lca_est <- apply(mods_, 2, function(x) summary(glm(meta_data$LCA_label~x, family="binomial"))$coefficients["x", "Estimate"])
+
+lca_adjp <- p.adjust(lca_pvals, "BH")
+
+# in_hospital_death bacteremia viruspos
+meta_data$in_hospital_death <- factor(meta_data$in_hospital_death, levels=c("0", "1"))
+meta_data$bacteremia <- factor(meta_data$bacteremia, levels=c("0", "1"))
+
+death_pvals <- apply(mods_, 2, function(x) summary(glm(meta_data$in_hospital_death~x, family="binomial"))$coefficients["x", "Pr(>|z|)"])
+death_est <- apply(mods_, 2, function(x) summary(glm(meta_data$in_hospital_death~x, family="binomial"))$coefficients["x", "Estimate"])
+death_adjp <- p.adjust(death_pvals, "BH")
+
+bact_pvals <- apply(mods_, 2, function(x) summary(glm(meta_data$bacteremia~x, family="binomial"))$coefficients["x", "Pr(>|z|)"])
+bact_est <- apply(mods_, 2, function(x) summary(glm(meta_data$bacteremia~x, family="binomial"))$coefficients["x", "Estimate"])
+bact_adjp <- p.adjust(bact_pvals, "BH")
+
+est_df <- data.frame(lca_est, death_est, bact_est)
+
+lca_adjp_fmt <- lca_adjp
+lca_adjp_fmt[lca_adjp<0.001] <- "P<.001"
+lca_adjp_fmt[lca_adjp<0.01 & lca_adjp>=0.001] <- "P<.01"
+lca_adjp_fmt[lca_adjp>=0.01] <- format(round(as.numeric(lca_adjp[lca_adjp>=0.01]), 2), nsmall = 2)
+lca_adjp_fmt <- paste0(paste(format(round(as.numeric(lca_est), 2), nsmall = 2), lca_adjp_fmt, sep="\n("), ")")
+
+death_adjp_fmt <- death_adjp
+death_adjp_fmt[death_adjp<0.001] <- "P<.001"
+death_adjp_fmt[death_adjp<0.01 & death_adjp>=0.001] <- "P<.01"
+death_adjp_fmt[death_adjp>=0.01] <- format(round(as.numeric(death_adjp[death_adjp>=0.01]), 2), nsmall = 2)
+death_adjp_fmt <- paste0(paste(format(round(as.numeric(death_est), 2), nsmall = 2), death_adjp_fmt, sep="\n("), ")")
+
+bact_adjp_fmt <- bact_adjp
+bact_adjp_fmt[bact_adjp<0.001] <- "P<.001"
+bact_adjp_fmt[bact_adjp<0.01 & bact_adjp>=0.001] <- "P<.01"
+bact_adjp_fmt[bact_adjp>=0.01] <- format(round(as.numeric(bact_adjp[bact_adjp>=0.01]), 2), nsmall = 2)
+bact_adjp_fmt <- paste0(paste(format(round(as.numeric(bact_est), 2), nsmall = 2), bact_adjp_fmt, sep="\n("), ")")
+
+text_df <- data.frame(lca_adjp_fmt, death_adjp_fmt, bact_adjp_fmt)
+
+pdf(paste(results_path, "wgcna_mods_LCA_label.pdf", sep = ""), width = 7, height = 10)
+print(labeledHeatmap(Matrix = est_df[, c(1:3)],
+                     xLabels = c("LCA_label", "in_hospital_death", "bacteremia"),
+                     yLabels = names(mods_),
+                     ySymbols = names(mods_),
+                     colorLabels = FALSE,
+                     colors = greenWhiteRed(50),
+                     textMatrix = text_df[, c(1:3)],
+                     setStdMargins = T,
+                     cex.text = 0.5,
+                     zlim = c(-20,20),
+                     main = paste("Module-trait relationships")))
+dev.off()
+
+# higher in Hyper
+green_genes <- ensembl_res$hgnc_symbol[match(colnames(wgcna_data)[mod_colors=="green"],
+                              ensembl_res$ensembl_gene_id)]
+
+green_df <- data.frame(colnames(wgcna_data)[mod_colors=="green"], green_genes, as.data.frame(cor(wgcna_data, mods_, use = "p"))[colnames(wgcna_data)[mod_colors=="green"], c("MEgreen")])
+
+genes_oi <- c("KY", "LTF", "TCN1", "GPI", "NKG7", "ENPP4", "CLINT1", "CD63", "PSMA6", "MTHFD2", "BPI", "CD24", "RETN", "MMP8")
+
+green_df[green_df$green_genes %in% genes_oi, ]
+
+#########################
+# COMPARISON WITH STAR
+######################### 
+cnt_data_STAR <- read.csv("/Users/lucileneyton/Box Sync/EARLI_plasma/data/raw/EARLI_star_pc_and_lincRNA_genecounts.qc.tsv", row.names = 1, sep = "\t")
+
+# filter and format
+cnt_data_STAR <- cnt_data_STAR[ , meta_data$HOST_PAXgene_filename]
+colnames(cnt_data_STAR) <- rownames(meta_data)
+
+cnt_data_STAR <- cnt_data_STAR[!duplicated(sapply(rownames(cnt_data_STAR), function(x) strsplit(x, "\\.")[[1]][1])), ]
+rownames(cnt_data_STAR) <- sapply(rownames(cnt_data_STAR), function(x) strsplit(x, "\\.")[[1]][1])
+
+cnt_data_STAR <- cnt_data_STAR[rownames(cnt_data_STAR) %in% rownames(cnt_data), ]
+
+# build DESeq2 object
+dds_STAR <- DESeqDataSetFromMatrix(countData = cnt_data_STAR, colData = meta_data,
+                              design = ~ LCA_label + agephi + Gender1)
+
+# choose the reference level for the factor of interest
+dds_STAR$LCA_label <- relevel(dds_STAR$LCA_label, ref = "Hypo")
+
+# run DESeq
+dds_STAR <- DESeq(dds_STAR)
+
+# extract results
+res_STAR <- results(dds_STAR, contrast = c("LCA_label", "Hyper", "Hypo"))
+
+# sort the genes from lowest to highest given adjusted p-values
+res_STAR <- res_STAR[order(res_STAR$padj, decreasing = F), ]
+
+# replace NA values with 1s
+res_STAR$padj[is.na(res_STAR$padj)] <- 1
+
+kallisto_results <- data.frame(res)
+
+dim(res_STAR[res_STAR$padj<0.05 , ])
+dim(kallisto_results[kallisto_results$padj<0.05, ])
+length(intersect(rownames(res_STAR[res_STAR$padj<0.05 , ]), rownames(kallisto_results[kallisto_results$padj<0.05, ])))
+
+cor.test(kallisto_results[intersect(rownames(kallisto_results), rownames(res_STAR)), ]$log2FoldChange,
+         res_STAR[intersect(rownames(kallisto_results), rownames(res_STAR)), ]$log2FoldChange, method="spearman")
+
+plot(kallisto_results[intersect(rownames(kallisto_results), rownames(res_STAR)), ]$log2FoldChange,
+     res_STAR[intersect(rownames(kallisto_results), rownames(res_STAR)), ]$log2FoldChange,
+     xlab="kallisto", ylab="STAR", main="Log Fold-changes")
 
 
 

@@ -11,6 +11,7 @@ setwd("/Users/lucileneyton/Box Sync/EARLI_VALID/de_analysis_sepsis/")
 library(ggplot2) 
 library(DESeq2)
 library(binom)
+library(fgsea)
 # 3.3.2
 #library(pheatmap) # 1.0.12
 #library(reshape2) # 1.4.4
@@ -174,6 +175,8 @@ perm_log2fc_corr <- function(df1, df2, df1_labels, df2_labels,
 # perm_cor_vals are the permuted correlation values
 # two-sided
 emp_pval <- function(cor_val, perm_cor_vals) {
+  cor_val <- cor_val[1]
+  
   greater_equal_cnt <- sum(abs(perm_cor_vals) >= abs(cor_val))
   
   print(binom.confint(greater_equal_cnt, length(perm_cor_vals),
@@ -288,6 +291,7 @@ corr_val <- log2fc_corr(vsd_mars, mars_data_filt,
                         df1_name = "EARLI", df2_name = "MARS", logtr_data=T
 )
 df_log2fc <- corr_val[["df_log2fc"]]
+df_mars <- corr_val[["df_log2fc"]][, "df2"]
 corr_val <- corr_val[["cor_val"]]
 
 corr_vals <- perm_log2fc_corr(vsd_mars, mars_data_filt,
@@ -358,17 +362,18 @@ pdf("mars24_color.pdf", width = 0.6*fig_width, height = 0.6*fig_height, fonts = 
 print(ggscatter(df_log2fc, x = "df1", y = "df2", fill="cat", color="black",
                 xlab = paste(paste("EARLI", paste("Hyper", "Hypo", sep=" / ")), "Log2 Fold Change"),
                 ylab = paste(paste("MARS", paste("Mars4", "Mars2", sep=" / ")), "Log2 Fold Change"),
+                title="MARS vs. EARLI",
                 shape=21)+
   scale_fill_manual(breaks=c("DE Same Direction","Non-DE Same Direction","Different Direction"), values = c("red", "pink", "white"))+
   stat_cor(method="spearman", aes(label = ..r.label..), size = 3, family="Helvetica") +
-  font("title", size = 8, family="Helvetica")+
+  font("title", size = 12, family="Helvetica")+
   font("subtitle", size = 8, family="Helvetica")+
   font("caption", size = 8, family="Helvetica")+
   font("xlab", size = 8, family="Helvetica")+
   font("ylab", size = 8, family="Helvetica")+
   font("xy.text", size = 8, family="Helvetica")+
   font("legend.title", size = 8, family="Helvetica")+
-  font("legend.text", size = 8, family="Helvetica"))
+    font("legend.text", size = 8, family="Helvetica") + theme(legend.position = "none"))
 dev.off()
 
 ##### MARS REACTIVE UNINFLAMED
@@ -398,6 +403,7 @@ corr_val <- log2fc_corr(vsd_mars, mars2_data_filt[, rownames(mars2_all_orig_labe
 )
 
 df_log2fc <- corr_val[["df_log2fc"]]
+df_mars2 <- corr_val[["df_log2fc"]][, "df2"]
 corr_val <- corr_val[["cor_val"]]
 
 corr_vals <- perm_log2fc_corr(vsd_mars, mars2_data_filt[, rownames(mars2_all_orig_labels)],
@@ -457,17 +463,18 @@ pdf("marsru_color.pdf", width = 0.6*fig_width, height = 0.6*fig_height, fonts = 
 print(ggscatter(df_log2fc, x = "df1", y = "df2", fill="cat", color="black",
                 xlab = paste(paste("EARLI", paste("Hyper", "Hypo", sep=" / ")), "Log2 Fold Change"),
                 ylab = paste(paste("MARS", paste("reactive", "uninflamed", sep=" / ")), "Log2 Fold Change"),
+                title="Reactive/Uninflamed vs. EARLI",
                 shape=21)+
         scale_fill_manual(breaks=c("DE Same Direction","Non-DE Same Direction","Different Direction"), values = c("red", "pink", "white"))+
         stat_cor(method="spearman", aes(label = ..r.label..), size = 3, family="Helvetica") +
-        font("title", size = 8, family="Helvetica")+
+        font("title", size = 12, family="Helvetica")+
         font("subtitle", size = 8, family="Helvetica")+
         font("caption", size = 8, family="Helvetica")+
         font("xlab", size = 8, family="Helvetica")+
         font("ylab", size = 8, family="Helvetica")+
         font("xy.text", size = 8, family="Helvetica")+
         font("legend.title", size = 8, family="Helvetica")+
-        font("legend.text", size = 8, family="Helvetica"))
+        font("legend.text", size = 8, family="Helvetica") + theme(legend.position = "none"))
 dev.off()
 
 ##### SRS
@@ -490,6 +497,7 @@ corr_val <- log2fc_corr(vsd_srs, srs_data_filt, earli_labels, srs_orig_labels,
 )
 
 df_log2fc <- corr_val[["df_log2fc"]]
+df_srs <- corr_val[["df_log2fc"]][, "df2"]
 corr_val <- corr_val[["cor_val"]]
 
 corr_vals <- perm_log2fc_corr(vsd_srs, srs_data_filt,
@@ -560,18 +568,166 @@ pdf("srs12_color.pdf", width = 0.6*fig_width, height = 0.6*fig_height, fonts = "
 print(ggscatter(df_log2fc, x = "df1", y = "df2", fill="cat", color="black",
                 xlab = paste(paste("EARLI", paste("Hyper", "Hypo", sep=" / ")), "Log2 Fold Change"),
                 ylab = paste(paste("SRS", paste("1", "2", sep=" / ")), "Log2 Fold Change"),
+                title="SRS vs. EARLI",
                 shape=21)+
         scale_fill_manual(breaks=c("DE Same Direction","Non-DE Same Direction","Different Direction"), values = c("red", "pink", "white"))+
         stat_cor(method="spearman", aes(label = ..r.label..), size = 3, family="Helvetica") +
-        font("title", size = 8, family="Helvetica")+
+        font("title", size = 12, family="Helvetica")+
         font("subtitle", size = 8, family="Helvetica")+
         font("caption", size = 8, family="Helvetica")+
         font("xlab", size = 8, family="Helvetica")+
         font("ylab", size = 8, family="Helvetica")+
         font("xy.text", size = 8, family="Helvetica")+
         font("legend.title", size = 8, family="Helvetica")+
-        font("legend.text", size = 8, family="Helvetica"))
+        font("legend.text", size = 8, family="Helvetica") + theme(legend.position = "none"))
 dev.off()
+
+#########################
+# ONLY CONSIDER DIFFERENTIALLY EXPRESSED GENES
+#########################
+dgea_data <- read.csv(paste0(results_path, "DGEA_results.csv"), row.names = 1)
+
+vsd_mars_de <- vsd_mars[rownames(vsd_mars) %in% rownames(dgea_data), ]
+vsd_srs_de <-  vsd_srs[rownames(vsd_srs) %in% rownames(dgea_data), ]
+
+mars_data_filt_de <- mars_data_filt[rownames(mars_data_filt) %in% rownames(dgea_data), ]
+srs_data_filt_de <- srs_data_filt[rownames(srs_data_filt) %in% rownames(dgea_data), ]
+
+# compare MARS4/2 vs Hyper/Hypo
+corr_val <- log2fc_corr(vsd_mars_de, mars_data_filt_de,
+                        earli_labels, mars_orig_labels,
+                        "LCA_label", "subphenotype", "Hyper", "Hypo",
+                        df2_group1 = "Mars2", df2_group2 = "Mars4",
+                        plot = TRUE, plot_label = paste(results_path,
+                                                        paste0(file_prefix, "log2fc_cor_mars24_hyperhypo_de.pdf"),
+                                                        sep = ""),
+                        df1_name = "EARLI", df2_name = "MARS", logtr_data=T
+)
+df_log2fc <- corr_val[["df_log2fc"]]
+corr_val <- corr_val[["cor_val"]]
+
+corr_vals <- perm_log2fc_corr(vsd_mars_de, mars_data_filt_de,
+                              earli_labels, mars_orig_labels,
+                              "LCA_label", "subphenotype", "Hyper", "Hypo",
+                              df2_group1 = "Mars2", df2_group2 = "Mars4",
+                              nperm = 1000, seed = 123
+)
+
+# generate p-value
+print(emp_pval(corr_val, corr_vals))
+
+# compare reactive/uninflamed vs Hyper/Hypo
+mars2_data_filt <- mars_data_filt_de[, colnames(mars_data_filt_de) %in% mars2_all_orig_labels$gsm_id]
+rownames(mars2_all_orig_labels) <- mars2_all_orig_labels$gsm_id
+mars2_all_orig_labels <- mars2_all_orig_labels[colnames(mars2_data_filt), ]
+corr_val <- log2fc_corr(vsd_mars_de, mars2_data_filt[, rownames(mars2_all_orig_labels)],
+                        earli_labels, mars2_all_orig_labels,
+                        "LCA_label", "predicted_cluster", "Hyper", "Hypo",
+                        df2_group1 = "reactive", df2_group2 = "uninflamed",
+                        plot = TRUE, plot_label = paste(results_path,
+                                                        paste0(file_prefix, "log2fc_cor_marsru_hyperhypo_de.pdf"),
+                                                        sep = ""),
+                        df1_name = "EARLI", df2_name = "MARS", logtr_data=T
+)
+
+df_log2fc <- corr_val[["df_log2fc"]]
+corr_val <- corr_val[["cor_val"]]
+
+corr_vals <- perm_log2fc_corr(vsd_mars_de, mars2_data_filt[, rownames(mars2_all_orig_labels)],
+                              earli_labels, mars2_all_orig_labels,
+                              "LCA_label", "predicted_cluster", "Hyper", "Hypo",
+                              df2_group1 = "reactive", df2_group2 = "uninflamed",
+                              nperm = 1000, seed = 123
+)
+print(emp_pval(corr_val, corr_vals))
+
+# compare SRS1/2 vs Hyper/Hypo
+corr_val <- log2fc_corr(vsd_srs_de, srs_data_filt_de, earli_labels, srs_orig_labels,
+                        "LCA_label", "subphenotype", "Hyper", "Hypo",
+                        df2_group1 = 1, df2_group2 = 2,
+                        plot = TRUE, plot_label =
+                          paste(results_path, paste0(file_prefix, "log2fc_cor_srs12_hyperhypo_de.pdf"), sep = ""),
+                        df1_name = "EARLI", df2_name = "SRS"
+)
+
+df_log2fc <- corr_val[["df_log2fc"]]
+corr_val <- corr_val[["cor_val"]]
+
+corr_vals <- perm_log2fc_corr(vsd_srs_de, srs_data_filt_de,
+                              earli_labels, srs_orig_labels,
+                              "LCA_label", "subphenotype", "Hyper", "Hypo",
+                              df2_group1 = 1, df2_group2 = 2,
+                              nperm = 1000, seed = 123
+)
+print(emp_pval(corr_val, corr_vals))
+
+#########################
+# GSEA ON WILCOXON-DERIVED P-VALUES
+#########################
+# IPA res
+hypervshypo_cp_sig <- read.csv(paste(results_path, "hypervshypo_cp_sig.csv", sep = ""))
+
+ipa_res_list <- list("mars"=read.csv(paste0(results_path, "ipa_mars.txt"), sep = "\t", skip = 2),
+                     "mars2"=read.csv(paste0(results_path, "ipa_mars2.txt"), sep = "\t", skip = 2),
+                     "srs"=read.csv(paste0(results_path, "ipa_srs.txt"), sep = "\t", skip = 2))
+
+for (ext_ds_name in names(ipa_res_list)){
+  ext_ds <- ipa_res_list[[ext_ds_name]]
+  
+  ext_ds_filt <- ext_ds[ext_ds$Ingenuity.Canonical.Pathways %in% hypervshypo_cp_sig$Ingenuity.Canonical.Pathways, ]
+  
+  for (path_ in hypervshypo_cp_sig$Ingenuity.Canonical.Pathways){
+    if (!(path_ %in% ext_ds_filt$Ingenuity.Canonical.Pathways)){
+      ext_ds_filt <- rbind(ext_ds_filt, c("Ingenuity.Canonical.Pathways"=path_, "X.log.p.value."=NA, "Ratio"=NA,  "z.score"=0, "Molecules"=NA, "X"=NA))
+    }
+  }
+  
+  ext_ds_filt$sig <- (abs(as.numeric(ext_ds_filt$z.score))>2)
+  
+  ext_ds_filt$cp <- factor(ext_ds_filt$Ingenuity.Canonical.Pathways, levels=hypervshypo_cp_sig[order(hypervshypo_cp_sig$zScore, decreasing = T), "Ingenuity.Canonical.Pathways"])
+  
+  ext_ds_filt$zscore_sign[ext_ds_filt$z.score > 0] <- "+"
+  ext_ds_filt$zscore_sign[ext_ds_filt$z.score < 0] <- "-"
+  
+  ext_ds_filt$zscore_sign <- as.factor(ext_ds_filt$zscore_sign)
+  ext_ds_filt$zscore_sign <- relevel(ext_ds_filt$zscore_sign, "+")
+  
+  ext_ds_filt$alpha[ext_ds_filt$sig==T] <- 1
+  ext_ds_filt$alpha[ext_ds_filt$sig==F] <- 0.5
+  
+  ext_ds_filt$z.score <- as.numeric(ext_ds_filt$z.score)
+  
+  # dot plot
+  pdf(paste(results_path, paste0(ext_ds_name, "_ipa_cp_dotplot.pdf"), sep = ""), width = fig_width*0.8, height = fig_height)
+  print(ggplot(ext_ds_filt, aes(x=z.score, y=cp)) +
+          geom_point(aes(color=zscore_sign, alpha=alpha), size=3, show.legend=F) +
+          scale_alpha(range = c(0.5, 1)) +
+          scale_color_manual(breaks=c("+", "-"), values = c("#EE7D31","#4472C4")) +
+          theme_bw() +
+          theme(text = element_text(family = "Helvetica", size=8),
+                axis.text.x = element_text(family = "Helvetica", size=8),
+                axis.text.y = element_text(family = "Helvetica", size=8),
+                axis.title.x = element_text(family = "Helvetica", size=8),
+                axis.title.y = element_text(family = "Helvetica", size=8),
+                legend.text = element_text(family = "Helvetica", size=8),
+                legend.title = element_text(family = "Helvetica", size=8),
+                strip.text.x = element_text(family = "Helvetica", size=8),
+                strip.text.y = element_text(family = "Helvetica", size=8),
+                plot.title = element_text(family = "Helvetica", size=8)) +
+          xlab("Z-score") +
+          ylab("Ingenuity Canonical Pathways") +
+          scale_x_continuous(breaks = c(-5, -2.5, 0, 2.5, 5)) +
+          scale_y_discrete(limits = rev(levels(ext_ds_filt$cp))))
+  dev.off()
+  
+}
+
+
+
+
+
+
+
 
 
 
