@@ -246,6 +246,86 @@ sig_results_anc <- data.frame(res_anc[res_anc$padj < 0.05, ])
 # 0.92 correlation
 cor.test(res$stat, res_anc[rownames(res), "stat"], method = "spearman")
 
+# with APACHE and SOFA scores
+meta_data_tmp <- meta_data
+
+meta_data_tmp$sofa[is.na(meta_data_tmp$sofa)] <- median(meta_data_tmp$sofa, na.rm = T)
+meta_data_tmp$apacheiii[is.na(meta_data_tmp$apacheiii)] <- median(meta_data_tmp$apacheiii, na.rm = T)
+meta_data_tmp$wbcmaxsaps[is.na(meta_data_tmp$wbcmaxsaps)] <- median(meta_data_tmp$wbcmaxsaps, na.rm = T)
+
+meta_data_tmp$sofa_scaled <- scale(meta_data_tmp$sofa)
+meta_data_tmp$apacheiii_scaled <- scale(meta_data_tmp$apacheiii)
+meta_data_tmp$wbcmaxsaps_scaled <- scale(meta_data_tmp$wbcmaxsaps)
+
+# build DESeq2 object
+dds_sofa <- DESeqDataSetFromMatrix(countData = cnt_data, colData = meta_data_tmp,
+                                  design = ~ LCA_label + agephi + Gender1 + sofa_scaled)
+
+# choose the reference level for the factor of interest
+dds_sofa$LCA_label <- relevel(dds_sofa$LCA_label, ref = "Hypo")
+
+# run DESeq
+dds_sofa <- DESeq(dds_sofa)
+
+# extract results
+res_sofa <- results(dds_sofa, contrast = c("LCA_label", "Hyper", "Hypo"))
+
+# replace NA values with 1s
+res_sofa$padj[is.na(res_sofa$padj)] <- 1
+
+# sort the genes from lowest to highest given adjusted p-values
+res_sofa <- res_sofa[order(res_sofa$padj, decreasing = F), ]
+
+# compare with results not including sofa values as covariate
+# 0.92 correlation
+cor.test(res$stat, res_sofa[rownames(res), "stat"], method = "spearman")
+
+# build DESeq2 object
+dds_apacheiii <- DESeqDataSetFromMatrix(countData = cnt_data, colData = meta_data_tmp,
+                                   design = ~ LCA_label + agephi + Gender1 + apacheiii_scaled)
+
+# choose the reference level for the factor of interest
+dds_apacheiii$LCA_label <- relevel(dds_apacheiii$LCA_label, ref = "Hypo")
+
+# run DESeq
+dds_apacheiii <- DESeq(dds_apacheiii)
+
+# extract results
+res_apacheiii <- results(dds_apacheiii, contrast = c("LCA_label", "Hyper", "Hypo"))
+
+# replace NA values with 1s
+res_apacheiii$padj[is.na(res_apacheiii$padj)] <- 1
+
+# sort the genes from lowest to highest given adjusted p-values
+res_apacheiii <- res_apacheiii[order(res_apacheiii$padj, decreasing = F), ]
+
+# compare with results not including apache iii values as covariate
+# 0.92 correlation
+cor.test(res$stat, res_apacheiii[rownames(res), "stat"], method = "spearman")
+
+# build DESeq2 object
+dds_wbc <- DESeqDataSetFromMatrix(countData = cnt_data, colData = meta_data_tmp,
+                                        design = ~ LCA_label + agephi + Gender1 + wbcmaxsaps_scaled)
+
+# choose the reference level for the factor of interest
+dds_wbc$LCA_label <- relevel(dds_wbc$LCA_label, ref = "Hypo")
+
+# run DESeq
+dds_wbc <- DESeq(dds_wbc)
+
+# extract results
+res_wbc <- results(dds_wbc, contrast = c("LCA_label", "Hyper", "Hypo"))
+
+# replace NA values with 1s
+res_wbc$padj[is.na(res_wbc$padj)] <- 1
+
+# sort the genes from lowest to highest given adjusted p-values
+res_wbc <- res_wbc[order(res_wbc$padj, decreasing = F), ]
+
+# compare with results not including apache iii values as covariate
+# 0.92 correlation
+cor.test(res$stat, res_wbc[rownames(res), "stat"], method = "spearman")
+
 #########################
 # GSEA - IPA
 #########################
@@ -409,45 +489,6 @@ print(ggplot(gsea_res_df_filt, aes(x=NES, y=pathway)) +
         ylab("Reactome Pathways") +
         scale_y_discrete(limits = rev(levels(gsea_res_df_filt$pathway))))
 dev.off()
-
-#########################
-# PROPORTION OF EXPLAINED VARIANCE
-#########################
-# expression cutoff
-vst_filt <- assay(vsd)
-vst_filt <- vst_filt[order(rowVars(vst_filt), decreasing=T), ]
-vst_filt <- vst_filt[1:1000, ]
-
-design <- ~ LCA_label + sofa_scaled + apacheiii_scaled + wbcmaxsaps + Gender1 + agephi
-
-meta_data$sofa_scaled <- scale(meta_data$sofa)
-meta_data$apacheiii_scaled <- scale(meta_data$apacheiii)
-
-var_part <- fitExtractVarPartModel(vst_filt, design, meta_data)
-
-colnames(var_part)[colnames(var_part)=="sofa_scaled"] <- "SOFA"
-colnames(var_part)[colnames(var_part)=="apacheiii_scaled"] <- "APACHE III"
-colnames(var_part)[colnames(var_part)=="wbcmaxsaps"] <- "White Cell Count"
-
-pdf(paste(results_path, "expl_var.pdf", sep = ""), width = fig_width*0.6, height = fig_height*0.5)
-print(plotVarPart(sortCols(var_part[c("LCA_label", "SOFA", "APACHE III", "White Cell Count")])) + 
-        ylim(c(0, 50))+
-        theme(text = element_text(family = "Helvetica", size=8),
-              axis.text.x = element_text(family = "Helvetica", size=8),
-              axis.text.y = element_text(family = "Helvetica", size=8),
-              axis.title.x = element_text(family = "Helvetica", size=8),
-              axis.title.y = element_text(family = "Helvetica", size=8),
-              legend.text = element_text(family = "Helvetica", size=8),
-              legend.title = element_text(family = "Helvetica", size=8),
-              strip.text.x = element_text(family = "Helvetica", size=8),
-              strip.text.y = element_text(family = "Helvetica", size=8),
-              plot.title = element_text(family = "Helvetica", size=8)))
-dev.off()
-      
-median(var_part$LCA_label)
-median(var_part$sofa_scaled)
-median(var_part$apacheiii_scaled)
-median(var_part$wbcmaxsaps)
 
 #########################
 # WGCNA

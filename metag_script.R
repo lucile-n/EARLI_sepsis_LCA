@@ -90,6 +90,7 @@ rbm_data_cast <- rbm_data_cast[, rownames(meta_data)]
 # format and melt
 bgc_data$EARLI_Barcode <- sapply(bgc_data$sample_name, function(x) paste0("EARLI_", strsplit(x, "_", fixed=T)[[1]][2]))
 bgc_data <- bgc_data[bgc_data$EARLI_Barcode %in% rownames(meta_data), ]
+#bgc_data <- bgc_data[bgc_data$name %in% rbm_data[rbm_data$sepsis_list, ]$name, ]
 
 bgc_data_cast <- dcast(bgc_data, tax_id~EARLI_Barcode, value.var="nt_rpm")
 bgc_data_cast[is.na(bgc_data_cast)] <- 0
@@ -148,7 +149,7 @@ stat.test$LCA_label <- "Hyper"
 stat.test$xmin <- "Hypo"
 stat.test$xmax <- "Hyper"
 
-pdf(paste0(results_path, "microb_mass_boxplot.pdf"), height = 3.5, width = 3)
+pdf(paste0(results_path, "microb_mass_boxplot.pdf"), height = 3.5, width = 2.5)
 print(ggplot(meta_data, aes(x = LCA_label, y = log10_microbial_mass,
                             fill = LCA_label)) +
         geom_boxplot() +
@@ -224,7 +225,7 @@ for (microb_type in names(microb_data)){
     stat.test$xmin <- "Hypo"
     stat.test$xmax <- "Hyper"
     
-    pdf(paste0(results_path, paste0(paste(microb_type, rank_, sep="_"), "_shannon_boxplot.pdf")), height = 3.5, width = 3)
+    pdf(paste0(results_path, paste0(paste(microb_type, rank_, sep="_"), "_shannon_boxplot.pdf")), height = 3.5, width = 2.5)
     print(ggplot(bact_data_gen_alpha, aes(x = LCA_label, y = Shannon,
                                           fill = LCA_label)) +
             geom_boxplot() +
@@ -272,7 +273,7 @@ for (microb_type in names(microb_data)){
     stat.test$xmax <- "Hyper"
     stat.test$LCA_label <- "Hyper"
     
-    pdf(paste0(results_path, paste0(paste(microb_type, rank_, sep="_"), "_dom_boxplot.pdf")), height = 3.5, width = 3)
+    pdf(paste0(results_path, paste0(paste(microb_type, rank_, sep="_"), "_dom_boxplot.pdf")), height = 3.5, width = 2.5)
     print(ggplot(dom_alt_LCA_df, aes(x = LCA_label, y = dominant,
                                           fill = LCA_label)) +
             geom_boxplot() +
@@ -312,9 +313,10 @@ for (microb_type in names(microb_data)){
     line_df$NMDS1c <- centroids[line_df$LCA_label, "NMDS1"]
     line_df$NMDS2c <- centroids[line_df$LCA_label, "NMDS2"]
     
-    p_nmds <- plot_ordination(prune_samples(sample_sums(bact_data_rank)>0, bact_data_rank), ord_df, color="LCA_label") +
+    p_nmds <- plot_ordination(prune_samples(sample_sums(bact_data_rank)>0, bact_data_rank), 
+                              ord_df, color="LCA_label") +
       scale_color_manual(breaks=c("Hyper", "Hypo"), values = c("#EE7D31","#4472C4")) +
-      annotate("text", label="PERMANOVA \np < 0.001", x=0.8, y=0.055, size=3) +
+      annotate("text", label="PERMANOVA \nP<.001", x=0.85, y=0.055, size=2.5) +
       theme_bw() + theme(text = element_text(family = "Helvetica", size=8),
                          axis.text.x = element_text(family = "Helvetica", size=8),
                          axis.text.y = element_text(family = "Helvetica", size=8),
@@ -327,12 +329,12 @@ for (microb_type in names(microb_data)){
                          plot.title = element_text(family = "Helvetica", size=8))
     
     p_nmds <- p_nmds + xlim(min(scrs$sites[,1]),max(scrs$sites[,1])) + ylim(min(scrs$sites[,2]),max(scrs$sites[,2]))
-    p_nmds <- p_nmds + geom_point(data=centroids, size=4)
     
     p_nmds <- p_nmds + geom_segment(data=line_df, 
                                     aes(x=NMDS1c, y=NMDS2c, xend=NMDS1, yend=NMDS2, colour=LCA_label), 
                                     size=0.25, show.legend=FALSE)
-                                    
+    
+    p_nmds <- p_nmds + geom_point(data=centroids, size=5, pch=21, color="black")
           
     pdf(paste0(results_path, paste0(paste(microb_type, rank_, sep="_"), "_nmds_boxplot.pdf")), height = 3, width = 4)
     print(p_nmds)
@@ -357,7 +359,7 @@ for (microb_type in names(microb_data)){
     tax_data_df <- data.frame(tax_data)
     
     use_RBM <- T
-    sepsis_only <- F
+    sepsis_only <- T
     if (use_RBM){
       
       if (sepsis_only){
@@ -375,73 +377,81 @@ for (microb_type in names(microb_data)){
       
     }
     
-    otu_pvals <- c()
-    otu_lfc <- c()
-    for (otu_row in rownames(otu_df)){
-      otu_row_df <- data.frame(t(otu_df[otu_row, , drop=F]))
-      colnames(otu_row_df) <- c("otu_row")
-      otu_row_df$LCA_label <- sample_data(bact_data_rank)[colnames(otu_df), "LCA_label"]$LCA_label
+    for(filt_ in c("bact_only", "all")){
       
-      otu_row_df$otu_row <- log10(otu_row_df$otu_row + 0.1)
+      otu_df_tmp <- otu_df
+      if (filt_=="bact_only"){
+        otu_df_tmp <- otu_df_tmp[, colSums(otu_df_tmp)>0]
+      }
       
-      wilcox_otu_row <- wilcox.test(otu_row~LCA_label, otu_row_df)
-      otu_pvals <- c(otu_pvals, wilcox_otu_row$p.value)
+      otu_pvals <- c()
+      otu_lfc <- c()
+      for (otu_row in rownames(otu_df_tmp)){
+        otu_row_df <- data.frame(t(otu_df_tmp[otu_row, , drop=F]))
+        colnames(otu_row_df) <- c("otu_row")
+        otu_row_df$LCA_label <- sample_data(bact_data_rank)[colnames(otu_df_tmp), "LCA_label"]$LCA_label
+        
+        otu_row_df$otu_row <- log10(otu_row_df$otu_row + 0.1)
+        
+        wilcox_otu_row <- wilcox.test(otu_row~LCA_label, otu_row_df)
+        otu_pvals <- c(otu_pvals, wilcox_otu_row$p.value)
+        
+        otu_lfc <- c(otu_lfc, mean(otu_row_df$otu_row[otu_row_df$LCA_label=="Hyper"])-mean(otu_row_df$otu_row[otu_row_df$LCA_label=="Hypo"]))
+      }
+      otu_padj <- p.adjust(otu_pvals, "BH")
       
-      otu_lfc <- c(otu_lfc, mean(otu_row_df$otu_row[otu_row_df$LCA_label=="Hyper"])-mean(otu_row_df$otu_row[otu_row_df$LCA_label=="Hypo"]))
+      wilcox_otu_df <- data.frame(cbind(rownames(otu_df_tmp), 
+                                        otu_lfc,
+                                        otu_pvals,
+                                        otu_padj))
+      colnames(wilcox_otu_df) <- c(rank_, "lfc", "pval", "padj")
+      wilcox_otu_df$lfc <- as.numeric(wilcox_otu_df$lfc)
+      wilcox_otu_df$padj <- as.numeric(wilcox_otu_df$padj)
+      
+      wilcox_otu_df_sig <- wilcox_otu_df[wilcox_otu_df$padj<0.05, ]
+      
+      wilcox_otu_df$sig <- wilcox_otu_df$padj < 0.05
+      
+      # barplot log fold-change
+      wilcox_otu_df <- wilcox_otu_df[order(abs(wilcox_otu_df$lfc), decreasing = T), ]
+      wilcox_otu_df <- wilcox_otu_df[order(wilcox_otu_df$padj, decreasing = F), ]
+      wilcox_otu_hypo_df <- wilcox_otu_df[wilcox_otu_df$lfc<0, ]
+      wilcox_otu_hyper_df <- wilcox_otu_df[wilcox_otu_df$lfc>0, ]
+      
+      wilcox_otu_filt_df <- wilcox_otu_df[wilcox_otu_df[, rank_] %in% c(wilcox_otu_hypo_df[, rank_][1:5], wilcox_otu_hyper_df[, rank_][1:5]), ]
+      wilcox_otu_filt_df <- wilcox_otu_filt_df[order(wilcox_otu_filt_df$lfc, decreasing = T), ]
+      wilcox_otu_filt_df[, rank_] <- factor(wilcox_otu_filt_df[, rank_], levels=rev(wilcox_otu_filt_df[, rank_]))
+      
+      wilcox_otu_filt_df$LCA_label <- wilcox_otu_filt_df$lfc
+      wilcox_otu_filt_df$LCA_label[wilcox_otu_filt_df$LCA_label<0] <- 'Hypo'
+      wilcox_otu_filt_df$LCA_label[wilcox_otu_filt_df$LCA_label!="Hypo"] <- 'Hyper'
+      
+      wilcox_otu_filt_df$alpha[wilcox_otu_filt_df$padj<0.05] <- 1
+      wilcox_otu_filt_df$alpha[wilcox_otu_filt_df$padj>=0.05] <- 0.5
+      
+      wilcox_otu_filt_df[, rank_] <- sapply(sapply(wilcox_otu_filt_df[, rank_], function(x) as.character(tax_data_df[tax_data_df[, "taxon"]==x, rank_])), function(x) paste(substring(str_split(x, " ")[[1]][1], 1, 1), str_split(x, " ")[[1]][2], sep=". "))
+      wilcox_otu_filt_df[, rank_] <- factor(wilcox_otu_filt_df[, rank_], levels=rev(wilcox_otu_filt_df[, rank_]))
+      
+      pdf(paste0(results_path, paste0(paste(microb_type, rank_, sep="_"), paste0(paste0("_", filt_), "_top5_barplot.pdf"))), height = 3.5, width = 3)
+      print(ggplot(wilcox_otu_filt_df, aes_string(x="lfc", y=rank_, fill="LCA_label", alpha="alpha")) + 
+              geom_col() + 
+              scale_fill_manual(breaks=c("Hyper", "Hypo"), values = c("#EE7D31","#4472C4")) +
+              scale_alpha(range = c(0.5, 1)) +
+              guides(alpha = FALSE) +
+              xlab("Log2 Fold-Change")  +
+              theme_bw() +
+              theme(legend.position="none", text = element_text(family = "Helvetica", size=8),
+                    axis.text.x = element_text(family = "Helvetica", size=8),
+                    axis.text.y = element_text(family = "Helvetica", size=8),
+                    axis.title.x = element_text(family = "Helvetica", size=8),
+                    axis.title.y = element_text(family = "Helvetica", size=8),
+                    legend.text = element_text(family = "Helvetica", size=8),
+                    legend.title = element_text(family = "Helvetica", size=8),
+                    strip.text.x = element_text(family = "Helvetica", size=8),
+                    strip.text.y = element_text(family = "Helvetica", size=8),
+                    plot.title = element_text(family = "Helvetica", size=8)))
+      dev.off()
     }
-    otu_padj <- p.adjust(otu_pvals, "BH")
-    
-    wilcox_otu_df <- data.frame(cbind(rownames(otu_df), 
-                                      otu_lfc,
-                                      otu_pvals,
-                                      otu_padj))
-    colnames(wilcox_otu_df) <- c(rank_, "lfc", "pval", "padj")
-    wilcox_otu_df$lfc <- as.numeric(wilcox_otu_df$lfc)
-    wilcox_otu_df$padj <- as.numeric(wilcox_otu_df$padj)
-    
-    wilcox_otu_df_sig <- wilcox_otu_df[wilcox_otu_df$padj<0.05, ]
-    
-    wilcox_otu_df$sig <- wilcox_otu_df$padj < 0.05
-    
-    # barplot log fold-change
-    wilcox_otu_df <- wilcox_otu_df[order(abs(wilcox_otu_df$lfc), decreasing = T), ]
-    wilcox_otu_df <- wilcox_otu_df[order(wilcox_otu_df$padj, decreasing = F), ]
-    wilcox_otu_hypo_df <- wilcox_otu_df[wilcox_otu_df$lfc<0, ]
-    wilcox_otu_hyper_df <- wilcox_otu_df[wilcox_otu_df$lfc>0, ]
-    
-    wilcox_otu_filt_df <- wilcox_otu_df[wilcox_otu_df[, rank_] %in% c(wilcox_otu_hypo_df[, rank_][1:5], wilcox_otu_hyper_df[, rank_][1:5]), ]
-    wilcox_otu_filt_df <- wilcox_otu_filt_df[order(wilcox_otu_filt_df$lfc, decreasing = T), ]
-    wilcox_otu_filt_df[, rank_] <- factor(wilcox_otu_filt_df[, rank_], levels=rev(wilcox_otu_filt_df[, rank_]))
-    
-    wilcox_otu_filt_df$LCA_label <- wilcox_otu_filt_df$lfc
-    wilcox_otu_filt_df$LCA_label[wilcox_otu_filt_df$LCA_label<0] <- 'Hypo'
-    wilcox_otu_filt_df$LCA_label[wilcox_otu_filt_df$LCA_label!="Hypo"] <- 'Hyper'
-    
-    wilcox_otu_filt_df$alpha[wilcox_otu_filt_df$padj<0.05] <- 1
-    wilcox_otu_filt_df$alpha[wilcox_otu_filt_df$padj>=0.05] <- 0.5
-    
-    wilcox_otu_filt_df[, rank_] <- sapply(wilcox_otu_filt_df[, rank_], function(x) as.character(tax_data_df[tax_data_df[, "taxon"]==x, rank_]))
-    wilcox_otu_filt_df[, rank_] <- factor(wilcox_otu_filt_df[, rank_], levels=rev(wilcox_otu_filt_df[, rank_]))
-    
-    pdf(paste0(results_path, paste0(paste(microb_type, rank_, sep="_"), "_top5_barplot.pdf")), height = 3, width = 4.5)
-    print(ggplot(wilcox_otu_filt_df, aes_string(x="lfc", y=rank_, fill="LCA_label", alpha="alpha")) + 
-            geom_col() + 
-            scale_fill_manual(breaks=c("Hyper", "Hypo"), values = c("#EE7D31","#4472C4")) +
-            scale_alpha(range = c(0.5, 1)) +
-            guides(alpha = FALSE) +
-            xlab("Log2 Fold-Change")  +
-            theme_bw() +
-            theme(text = element_text(family = "Helvetica", size=8),
-                  axis.text.x = element_text(family = "Helvetica", size=8),
-                  axis.text.y = element_text(family = "Helvetica", size=8),
-                  axis.title.x = element_text(family = "Helvetica", size=8),
-                  axis.title.y = element_text(family = "Helvetica", size=8),
-                  legend.text = element_text(family = "Helvetica", size=8),
-                  legend.title = element_text(family = "Helvetica", size=8),
-                  strip.text.x = element_text(family = "Helvetica", size=8),
-                  strip.text.y = element_text(family = "Helvetica", size=8),
-                  plot.title = element_text(family = "Helvetica", size=8)))
-    dev.off()
     
     # dominant species per sample considering sepsis-causing pathogens only
     dominant_species <- rownames(otu_df)[apply(otu_df, 2, which.max)]
@@ -535,13 +545,13 @@ for (microb_type in names(microb_data)){
   )
   stat.test$p[stat.test$p<0.001] <- "P<.001"
   stat.test$p[stat.test$p<0.001 & stat.test$p<=0.01] <- "P<.01"
-  stat.test$p[stat.test$p>0.01] <- format(round(as.numeric(stat.test$p[stat.test$p>0.01]), digits = 2), 2)
+  stat.test$p[stat.test$p>0.01] <- paste0("P=", format(round(as.numeric(stat.test$p[stat.test$p>0.01]), digits = 2), 2))
   stat.test$y.position <- max(sum_rpm$sum_rpm)+0.1
   stat.test$LCA_label <- "Hyper"
   stat.test$xmin <- "Hypo"
   stat.test$xmax <- "Hyper"
 
-  pdf(paste0(results_path, paste0(microb_type, "_ntrpm_boxplot.pdf")), height = 3.5, width = 3)
+  pdf(paste0(results_path, paste0(microb_type, "_ntrpm_boxplot.pdf")), height = 3.5, width = 2.5)
   print(ggplot(sum_rpm, aes(x = LCA_label, y = sum_rpm,
                             fill = LCA_label)) +
           geom_boxplot() +
@@ -580,18 +590,18 @@ stat_test <- meta_data %>%
 padj_vect_fmt <- stat_test$p
 padj_vect_fmt[as.numeric(stat_test$p)<0.001] <- "P<.001"
 padj_vect_fmt[as.numeric(stat_test$p)>=0.001 & as.numeric(stat_test$p)<0.01] <- "P<.01"
-padj_vect_fmt[as.numeric(stat_test$p)>=0.01] <- format(round(as.numeric(padj_vect_fmt[as.numeric(stat_test$p)>=0.01]), 2), nsmall = 2)
+padj_vect_fmt[as.numeric(stat_test$p)>=0.01] <- paste0("P=", format(round(as.numeric(padj_vect_fmt[as.numeric(stat_test$p)>=0.01]), 2), nsmall = 2))
 stat_test$p <- padj_vect_fmt
 
 stat_test$y.position <- 1.01
 stat_test$LCA_label <- "Hypo"
 
-pdf(paste0(results_path, "enterobacteriaceae_prop_boxplot.pdf"), height = 3.5, width = 3)
+pdf(paste0(results_path, "enterobacteriaceae_prop_boxplot.pdf"), height = 3.5, width = 2.5)
 print(ggplot(meta_data, aes(x = LCA_label, y = enterobacteriaceae_prop,
                             fill = LCA_label)) +
         geom_boxplot() +
         geom_point() +
-        ylab("Enterobacteriaceae Dominance") +
+        ylab("Enterobacteriaceae relative dominance") +
         stat_pvalue_manual(stat_test, label="p", 
                            family = "Helvetica", size=3) +
         scale_fill_manual(breaks=c("Hyper", "Hypo"), values = c("#EE7D31","#4472C4")) +
