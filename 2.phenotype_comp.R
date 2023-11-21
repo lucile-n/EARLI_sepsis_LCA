@@ -12,16 +12,7 @@ library(ggplot2)
 library(DESeq2)
 library(binom)
 library(fgsea)
-# 3.3.2
-#library(pheatmap) # 1.0.12
-#library(reshape2) # 1.4.4
-# # 1.28.1
-#library(biomaRt) # 2.44.4
-#library(ggpubr) # 0.4.0
-#library(mclust) # 5.4.6
-#library(VennDiagram) # 1.6.20
-#source("clusterRepro_parallel.R")
-# # 1.1-1
+library(ggpubr)
 
 # set ggplot2 theme
 theme_update(text = element_text(family = "Helvetica", size=8),

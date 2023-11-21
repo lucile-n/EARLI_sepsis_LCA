@@ -18,6 +18,8 @@ library(plyr)
 library(GGally)
 library(corrplot)
 library(WGCNA)
+library(msigdbr)
+library(stringr)
 
 # set ggplot2 theme
 theme_update(text = element_text(family = "Helvetica", size=8),
@@ -82,7 +84,7 @@ meta_data$agephi <- scale(meta_data$agephi)
 # cpm for cibersort
 cpm_data <- cpm(cnt_data)
 
-# save VST data
+# save CPM data
 write.csv(t(cpm_data),
           paste(data_path, "processed/cpm_data.csv", sep = ""))
 
@@ -562,7 +564,7 @@ mod_colors <- labels2colors(net_$colors)
 mod_eig <- moduleEigengenes(wgcna_data, mod_colors)$eigengenes
 mods_ <- orderMEs(mod_eig)
 mod_trait_cor <- cor(mods_, wgcna_meta_data, use = "p")
-mod_trait_pval <- corPvalueStudent(mod_trait_cor, nSamples)
+mod_trait_pval <- corPvalueStudent(mod_trait_cor, n_samples)
 
 # mod covs relationships
 sizeGrWindow(10,6)
